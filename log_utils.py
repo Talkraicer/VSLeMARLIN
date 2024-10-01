@@ -1,17 +1,8 @@
-from xml.etree import ElementTree as ET
-import pandas as pd
-import numpy as np
 import wandb
-import os
-import traci
-from results_utils import output_file_to_df, calc_stats_metric
-from utils import exp_name
-results_reps_folder = "results_reps"
-NUM_EDGES = 8
+from settings import *
 
-def init_wandb_logger(policy_name,av_rate,delete_older=False):
-    proj_name = exp_name + "_" + str(av_rate)
 
+def init_wandb_logger(proj_name, policy_name, delete_older=False):
     api = wandb.Api()
     username = api.default_entity
 

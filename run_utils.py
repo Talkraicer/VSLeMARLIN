@@ -7,8 +7,9 @@ from tqdm import tqdm
 from multiprocessing import Pool
 import wandb
 import time
-# from log_utils import log_features, init_wandb_logger
+from log_utils import init_wandb_logger
 import pickle
+
 
 
 def extract_sim_features():
@@ -66,19 +67,16 @@ def extract_sim_features():
                    }
         return log_msg
 
+def set_speed_limits(segments_speeds):
+    for seg,speed in segments_speeds.items():
+        edges = seg.split("+")
+        for edge in edges:
+            traci.edge.setMaxSpeed(edge, speed)
 
-def handle_step(t, policy_name, demand, seed, log_rate=100):
-    # if log_rate and t % log_rate == 0:
-    #     if t == 0:
-    #         init_wandb_logger(policy_name, delete_older=DELETE_OLDER)
-    #     output_file_name = policy_name + exp_name + "_" + str(av_rate) + ".xml"
-    #     if seed:
-    #         output_file_name = f"{seed}/{output_file_name}"
-    #     log_msg = log_features(output_file_name, t, LOG_RATE)
-    #
-    #     if log_msg and not seed:
-    #         log_msg["MinPassNum"] = CONTROL_MIN_START
-    #         wandb.log(log_msg)
-    # if policy_name.startswith("Control") or policy_name.startswith("Trained"):
-    #     allow_min_pass(policy_name, CONTROL_MIN_START, EndToEnd=True)
-    pass
+def handle_step(t, policy_name, demand=None, seed=None, log_rate=100):
+    if log_rate and t % log_rate == 0:
+        if not demand or not seed:
+            raise ValueError("demand and seed must be provided if log_rate is not None")
+        if t == 0:
+            init_wandb_logger(demand+"_"+seed, policy_name, delete_older=True)
+
