@@ -1,124 +1,104 @@
+import os
 from xml.etree import ElementTree as ET
-import numpy as np
-import scipy.stats as stats
 import copy
 import pandas as pd
 import matplotlib.pyplot as plt
-def normalize_dict(d):
-    total = sum(d.values())
-    return {k: v / total for k, v in d.items()}
+from settings import *
+import numpy as np
+np.random.seed(42)
 
-exp_name = "LeftCompScenarios"
-PROB_PASS_HD = {1: 0.63, 2: 0.28, 3: 0.06, 4: 0.02, 5: 0.01}
-FACTOR_AV = 1
-PROB_PASS_AV = copy.deepcopy(PROB_PASS_HD)
-PROB_PASS_AV[1] *= FACTOR_AV
-PROB_PASS_AV = normalize_dict(PROB_PASS_AV)
+DEMAND_SIZES = {"low": 2500, "medium": 3500, "high": 4500}
+NUM_LANES = 4
+def create_vehicle_amounts(demand):
+    size = DEMAND_SIZES[demand]
+    grow_rates = [1, 1.2, 1.4, 1.6, 1.8, 2.0]
+    decay_rates = [2.0, 1.8, 1.6, 1.4, 1.2, 1.0]
+    # every key stands for 10 min
+    veh_amounts = {i:size*grow_rate for i,grow_rate in enumerate(grow_rates)}
+    veh_amounts.update({i+6:size*decay_rate for i,decay_rate in enumerate(decay_rates)})
 
-print("Expected number of passengers in AVs: ", sum([k*v for k,v in PROB_PASS_AV.items()]))
-print("Expected number of passengers in HDs: ", sum([k*v for k,v in PROB_PASS_HD.items()]))
-
-
-VEH_AMOUNT = {
-              6: 4000,7:7000,8:7000,9:4000, # RUSH HOURS
-              10:0,11:0, # BREAK
-              12:9000, # PEAK
-              13:0,14:0, # BREAK
-              15:5800,16:5800, #MID DAY
-              17:0,18:0, # BREAK
-              19:4000,20:4000, # WEEKEND
-              21:0,22:0,# BREAK
-              23:4000, 24: 5000, 25:6000, 26:7000, 27:6000, 28: 5000, 29:4000 # Moderate Peak
-              }
-df = pd.DataFrame(VEH_AMOUNT.items(), columns = ['Hour', 'Vehicles'])
-df.plot(x = 'Hour', y = 'Vehicles', kind = 'bar')
-plt.suptitle('Vehicles demand per hour')
-plt.grid()
-plt.show()
-EXIT_PROP = 0.1
-BUS_AMOUNT = {
-              6: 30,7:60,8:60,9:30, # RUSH HOURS
-              10:0,11:0, # BREAK
-              12:40, # PEAK
-              13:0,14:0, # BREAK
-              15:40,16:40, #MID DAY
-              17:0,18:0, # BREAK
-              19:0,20:0, # WEEKEND
-              21:0,22:0,# BREAK
-              23:30,24: 40, 25:50, 26:60, 27:50, 28: 40, 29:30 # Moderate Peak
-              }
+    df = pd.DataFrame(veh_amounts.items(), columns = ['10min', 'Vehicles'])
+    df.plot(x = '10min', y = 'Vehicles', kind = 'bar')
+    plt.suptitle('Vehicles demand per hour')
+    plt.grid()
+    plt.savefig(f'{EXP_NAME}_{demand}.png')
+    # plt.show()
+    return veh_amounts
 
 
-# TODO: Find bus occupancy distribution
-BUS_PASS_RANGE = range(25, 45)
-PROB_PASS_BUS = {i: 1 / len(BUS_PASS_RANGE) for i in BUS_PASS_RANGE} # Expectation = 25
+def set_rou_file(demand,seeds, HOUR_LEN = 600):
 
+    veh_amounts = create_vehicle_amounts(demand)
+    in_junc = "J0"
+    out_junc = "J11"
+    in_ramps = [f'i{i}' for i in range(1,6)]
+    out_ramps = [f'o{i}' for i in range(1,6)]
 
-def set_rou_file(av_prob, HOUR_LEN = 3600):
-    # round the probabilities to 2 decimal places
-    av_prob = round(av_prob, 2)
-    hd_prob = round(1 - av_prob, 2)
-    # Load and parse the XML file
-    tree = ET.parse(f'../{exp_name}.rou.xml')
-    root = tree.getroot()
+    for seed in seeds:
+        # Load and parse the XML file
+        tree = ET.parse(f'{EXP_NAME}.rou.xml')
+        root = tree.getroot()
 
-    # Set vTypeDistribution to contain the probabilities of each vehicle type and the number of passengers
-    for vTypeDist in root.findall('vTypeDistribution'):
-        vTypeDist.text += '\t'
-        if vTypeDist.attrib['id'] == 'vehicleDist':
-            for k,v in PROB_PASS_AV.items():
-                prob = round(av_prob * v, 5)
-                elem = ET.Element('vType', id=f'AV_{k}', color='blue', probability=str(prob), vClass='evehicle')
-                elem.tail = '\n\t\t'
-                vTypeDist.append(elem)
-            for k,v in PROB_PASS_HD.items():
-                prob = round(hd_prob * v,5)
-                elem = ET.Element('vType', id=f'HD_{k}', color='red', probability=str(prob), vClass='passenger')
-                elem.tail = '\n\t\t'
-                vTypeDist.append(elem)
-        elif vTypeDist.attrib['id'] == 'busDist':
-            for k,v in PROB_PASS_BUS.items():
-                elem = ET.Element('vType', id=f'Bus_{k}', probability=str(v), vClass='bus')
-                elem.tail = '\n\t\t'
-                vTypeDist.append(elem)
+        np.random.seed(seed)
+        in_probs = np.random.uniform(0,0.2,5)
+        out_probs = np.random.uniform(0,0.2,5)
+        for hour,hour_demand in veh_amounts.items():
+            total_arrival_prob = hour_demand / 3600
+            taken = 0
+            for i, (in_ramp, in_prob) in enumerate(zip(in_ramps, in_probs)):
+                left_in = 1
+                # In ramps to Out ramps
+                for j,(out_ramp, out_prob) in enumerate(zip(out_ramps, out_probs)):
+                    if i > j:
+                        continue
+                    prob = in_prob * out_prob
+                    left_in -= out_prob
+                    flow_prob = total_arrival_prob * prob
+                    if total_arrival_prob * HOUR_LEN > 1:
+                        flow = ET.Element('flow', id=f'flow_{hour}_{in_ramp}_{out_ramp}', type="DEFAULT_VEHTYPE", begin=str(hour * HOUR_LEN),
+                                          fromJunction=in_ramp, toJunction=out_ramp,end=str((hour +1) * HOUR_LEN), probability=f"{flow_prob}",departSpeed="desired")
+                        flow.tail = '\n\t'
+                        root.append(flow)
+                    else:
+                        print(f'hour {hour} in_ramp {in_ramp} out_ramp {out_ramp} prob {flow_prob}')
+                # In ramps to Out junction
+                flow = ET.Element('flow', id=f'flow_{hour}_{in_ramp}_{out_junc}', type="DEFAULT_VEHTYPE",
+                                  begin=str(hour * HOUR_LEN),
+                                  fromJunction=in_ramp, toJunction=out_junc, end=str((hour + 1) * HOUR_LEN),
+                                  probability=f"{left_in* in_prob*total_arrival_prob}",departSpeed="desired")
+                flow.tail = '\n\t'
+                root.append(flow)
 
-    # Create a flow for each hour of the day
-    for hour in VEH_AMOUNT.keys():
-        if VEH_AMOUNT[hour] == 0:
-            continue
-        flow = ET.Element('flow', id=f'MajorFlow{hour}', type="vehicleDist", begin=str((hour-6) * HOUR_LEN), departLane="random",
-                          fromJunction="J0", toJunction="J9",end=str((hour -5) * HOUR_LEN), vehsPerHour=str(int(VEH_AMOUNT[hour]*(1-2*EXIT_PROP))), departSpeed="max")
-        flow_J3 = ET.Element('flow', id=f'MajorFlow{hour}_J3', type="vehicleDist", begin=str((hour-6) * HOUR_LEN), departLane="random",
-                          fromJunction="J0", toJunction="J3",end=str((hour -5) * HOUR_LEN), vehsPerHour=str(int(VEH_AMOUNT[hour]* EXIT_PROP)), departSpeed="max", arrivalLane="0")
-        flow_J5 = ET.Element('flow', id=f'MajorFlow{hour}_J5', type="vehicleDist", begin=str((hour-6) * HOUR_LEN), departLane="random",
-                          fromJunction="J0", toJunction="J5",end=str((hour -5) * HOUR_LEN), vehsPerHour=str(int(VEH_AMOUNT[hour]* EXIT_PROP)), departSpeed="max", arrivalLane="0")
-        flow_J7 = ET.Element('flow', id=f'MajorFlow{hour}_J7', type="vehicleDist", begin=str((hour-6) * HOUR_LEN), departLane="random",
-                          fromJunction="J0", toJunction="J7",end=str((hour -5) * HOUR_LEN), vehsPerHour=str(int(VEH_AMOUNT[hour]* EXIT_PROP)), departSpeed="max", arrivalLane="0")
+            # In junction to Out ramps
+            for out_ramp, out_prob in zip(out_ramps, out_probs):
+                taken += out_prob
+                for lane in range(NUM_LANES):
+                    flow_prob = total_arrival_prob * out_prob / NUM_LANES
+                    flow = ET.Element('flow', id=f'flow_{hour}_{in_junc}_{out_ramp}_{lane}', type="DEFAULT_VEHTYPE", departLane=str(lane),
+                                      begin=str(hour * HOUR_LEN),
+                                      fromJunction=in_junc, toJunction=out_ramp, end=str((hour + 1) * HOUR_LEN),
+                                      probability=f"{flow_prob}",departSpeed="desired")
+                    flow.tail = '\n\t'
+                    root.append(flow)
 
-        flow_J4 = ET.Element('flow', id=f'MajorFlow{hour}_J4', type="vehicleDist", begin=str((hour-6) * HOUR_LEN), departLane="0",
-                          fromJunction="J4", toJunction="J9",end=str((hour -5) * HOUR_LEN), vehsPerHour=str(int(VEH_AMOUNT[hour]*EXIT_PROP)), departSpeed="max")
-        flow_J2 = ET.Element('flow', id=f'MajorFlow{hour}_J2', type="vehicleDist", begin=str((hour-6) * HOUR_LEN), departLane="0",
-                             fromJunction="J2", toJunction="J9",end=str((hour -5) * HOUR_LEN), vehsPerHour=str(int(VEH_AMOUNT[hour]*EXIT_PROP)), departSpeed="max")
-        flow_J6 = ET.Element('flow', id=f'MajorFlow{hour}_J6', type="vehicleDist", begin=str((hour-6) * HOUR_LEN), departLane="0",
-                            fromJunction="J6", toJunction="J9",end=str((hour -5) * HOUR_LEN), vehsPerHour=str(int(VEH_AMOUNT[hour]*EXIT_PROP)), departSpeed="max")
-        if BUS_AMOUNT[hour] != 0:
-            flow_Bus = ET.Element('flow', id=f'busFlow{hour}', type="busDist", begin=str((hour-6) * HOUR_LEN), departLane="random",
-                              fromJunction="J0", toJunction="J9",end=str((hour -5) * HOUR_LEN), vehsPerHour=str(BUS_AMOUNT[hour]), departSpeed="max")
+            # In junction to Out junction
+            in_out_prob = 1 - taken
+            assert in_out_prob >= 0
+            for lane in range(NUM_LANES):
+                flow_prob = total_arrival_prob * in_out_prob / NUM_LANES
+                flow = ET.Element('flow', id=f'flow_{hour}_{in_junc}_{out_junc}_{lane}', type="DEFAULT_VEHTYPE", departLane=str(lane),
+                                  begin=str(hour * HOUR_LEN),
+                                  fromJunction=in_junc, toJunction=out_junc, end=str((hour + 1) * HOUR_LEN),
+                                  probability=f"{flow_prob}",departSpeed="desired")
+                flow.tail = '\n\t'
+                root.append(flow)
 
-        for elem in [flow, flow_J3, flow_J5, flow_J7, flow_J2, flow_J4, flow_J6]:
-            elem.tail = '\n\t'
-            root.append(elem)
-        if BUS_AMOUNT[hour] != 0:
-            flow_Bus.tail = '\n\t'
-            root.append(flow_Bus)
-
-    # Save the changes back to the file
-    # tree.write(f'{exp_name}_flow{flow}_av{av_prob}_Bus{Bus_prob}.rou.xml')
-    tree.write(f'{exp_name}_av{av_prob}.rou.xml')
+        # Save the changes back to the file
+        os.makedirs(f"{demand}/{seed}", exist_ok=True)
+        tree.write(f'{demand}/{seed}/{EXP_NAME}.rou.xml')
 
 
 if __name__ == '__main__':
-    for av_prob in [0.1,0.2,0.3,0.4,0.6,0.8]:
-        set_rou_file(av_prob, HOUR_LEN = 1800)
-
-    set_rou_file(0.5, HOUR_LEN = 15)
+    seeds = [np.random.randint(0, 10000) for _ in range(10)]
+    for demand in DEMANDS:
+        set_rou_file(demand, seeds)
