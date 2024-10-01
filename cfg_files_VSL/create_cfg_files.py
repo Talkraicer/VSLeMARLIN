@@ -13,13 +13,13 @@ def set_cfg_file(demand, seed):
 
     # set route file
     route_file = root.find("input").find('route-files')
-    route_file.set('value', f'{ROOT}/rou_files/{demand}/{seed}/{EXP_NAME}.rou.xml')
+    route_file.set('value', f'{ROOT}/rou_files_{EXP_NAME}/{demand}/{seed}/{EXP_NAME}.rou.xml')
 
 
 
     # set net file
     net_file = root.find("input").find('net-file')
-    net_file.set('value', f'{ROOT}/cfg_files/{EXP_NAME}.net.xml')
+    net_file.set('value', f'{ROOT}/cfg_files_{EXP_NAME}/{EXP_NAME}.net.xml')
 
     # set seed
     seed_element = root.find("random_number").find('seed')

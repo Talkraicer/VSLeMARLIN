@@ -7,7 +7,7 @@ from settings import *
 import numpy as np
 np.random.seed(42)
 
-DEMAND_SIZES = {"low": 2500, "medium": 3500, "high": 4500}
+DEMAND_SIZES = {"low": 2500, "medium": 3500, "high": 5000}
 NUM_LANES = 4
 def create_vehicle_amounts(demand):
     size = DEMAND_SIZES[demand]
@@ -30,7 +30,7 @@ def set_rou_file(demand,seeds, HOUR_LEN = 600):
 
     veh_amounts = create_vehicle_amounts(demand)
     in_junc = "J0"
-    out_junc = "J11"
+    out_junc = "J7"
     in_ramps = [f'i{i}' for i in range(1,6)]
     out_ramps = [f'o{i}' for i in range(1,6)]
 
