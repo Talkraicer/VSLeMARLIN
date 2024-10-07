@@ -123,6 +123,7 @@ class SegVSL(gym.Env):
         rewards, done = self._action_wrapper(seg_actions)
         obs = self.observation()
         if done:
+            traci.close()
             mean_delay = get_mean_delay(self.demand,self.seed, self.policy_name)
             return obs, mean_delay, done, False, rewards
         return obs, 0, done, False, rewards
