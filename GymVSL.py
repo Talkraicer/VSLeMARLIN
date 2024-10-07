@@ -16,7 +16,7 @@ from main import init_simulation
 
 warnings.filterwarnings("ignore")
 np.random.seed(SEED)
-
+LOG = False
 
 # List of relevant studied features
 
@@ -29,8 +29,8 @@ def set_observations(config):
     return OrderedDict(
         {seg: gym.spaces.Tuple((
             gym.spaces.discrete.Discrete(config.max_num_vehs_seg),  # num_vehs
-            gym.spaces.Box(config.min_speed, config.max_speed),  # mean_speed
-            gym.spaces.Box(config.min_speed, config.max_speed),  # current_SL
+            gym.spaces.Box(config.min_speed, config.max_speed, shape=(), dtype=np.float32),  # mean_speed
+            gym.spaces.Box(config.min_speed, config.max_speed, shape=(), dtype=np.float32),  # current_SL
             gym.spaces.Discrete(config.sim_duration)  # time_passed
         ))
             for seg in SEGMENTS})
@@ -47,7 +47,7 @@ class Config:
         self.warmup = 40  # warmup num acts before starting the simulation
 
         # Speed Limits
-        self.min_speed = 1
+        self.min_speed = 0
         self.max_speed = 37
         self.speed_step = 3
         self.max_num_vehs_seg = 1000  # TODO: change
@@ -131,6 +131,8 @@ class SegVSL(gym.Env):
         # normalize the features
         num_vehs = num_vehs
         mean_speed = mean_speed
+        # convert mean_speed to dtype float32
+        mean_speed = np.float32(mean_speed)
         return [num_vehs, mean_speed]
 
     def _action_wrapper(self, seg_actions):
@@ -151,7 +153,7 @@ class SegVSL(gym.Env):
         last_step_vehs = {seg: set() for seg in SEGMENTS}
         for seg in SEGMENTS:
             for edge in seg.split("+"):
-                last_step_vehs[seg].union(set(traci.edge.getLastStepVehicleIDs(edge)))
+                last_step_vehs[seg] = last_step_vehs[seg].union(set(traci.edge.getLastStepVehicleIDs(edge)))
 
         # run the step action_rate times
         for i in range(self.config.act_rate):
@@ -162,17 +164,17 @@ class SegVSL(gym.Env):
             curr_step_vehs = {seg: set() for seg in SEGMENTS}
             for seg in SEGMENTS:
                 for edge in seg.split("+"):
-                    curr_step_vehs[seg].union(set(traci.edge.getLastStepVehicleIDs(edge)))
+                    curr_step_vehs[seg] = curr_step_vehs[seg].union(set(traci.edge.getLastStepVehicleIDs(edge)))
                 rewards[seg] += len(last_step_vehs[seg] - curr_step_vehs[seg])
                 last_step_vehs[seg] = curr_step_vehs[seg]
 
         # update the state
         self.state = {seg: self._extract_features_segment(seg) for seg in SEGMENTS}
         for seg in SEGMENTS:
-            self.state[seg].append(self.last_speeds[seg])
+            self.state[seg].append(np.float32(self.last_speeds[seg]))
             self.state[seg].append(self.time_since_change[seg])
 
-        self.state = {seg: np.array(self.state[seg]).astype(np.float32) for seg in SEGMENTS}
+        self.state = {seg: tuple(self.state[seg]) for seg in SEGMENTS}
 
         done = traci.simulation.getMinExpectedNumber() <= 0
 
@@ -184,7 +186,8 @@ if __name__ == '__main__':
     config = Config()
     config.log_wandb = False
     env = SegVSL("eMARLIN", config)
-    logger = Logger("eMARLIN")
+    if LOG:
+        logger = Logger("eMARLIN")
     check_env(env, warn=True)
 
     # run the environment
@@ -193,5 +196,7 @@ if __name__ == '__main__':
     while not done:
         actions = {seg: 1 for seg in SEGMENTS}
         obs, total_reward, done, _, agents_rewards = env.step(actions)
-        logger.log(actions, agents_rewards)
+        if LOG:
+            logger.log(actions, agents_rewards)
         total_reward_sum += total_reward
+        print(f"Total Reward: {total_reward_sum}")
