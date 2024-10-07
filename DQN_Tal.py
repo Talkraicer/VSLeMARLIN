@@ -127,7 +127,8 @@ def optimize_model(memory, policy_net, target_net, optimizer):
 def main():
     policy_name = "DQN_distri"
     env = SegVSL(policy_name, Config())
-    logger = Logger(policy_name)
+    if LOG:
+        logger = Logger(policy_name)
     agents = {}
     for seg in SEGMENTS:
         # Get number of actions from gym action space
@@ -160,7 +161,8 @@ def main():
                 actions[seg] = select_action(state_tensor, steps_done, agents[seg][0], env.action_space[seg])
             next_state, mean_delay, done, _, agents_rewards = env.step(actions)
             total_reward += sum(agents_rewards.values())
-            logger.log(actions, agents_rewards)
+            if LOG:
+                logger.log(actions, agents_rewards)
             # Store the transition in memory
             for seg in SEGMENTS:
                 state_dict = state[seg]
@@ -190,7 +192,8 @@ def main():
         print("*" * 50)
         mean_delays[env.demand].append(mean_delay)
     # end wandb
-    logger.close()
+    if LOG:
+        logger.close()
     env.close()
     with open("delays.txt", "w") as f:
         for demand in mean_delays:
