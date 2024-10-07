@@ -30,7 +30,7 @@ def set_observations(config):
         {seg: gym.spaces.Tuple((
             gym.spaces.discrete.Discrete(config.max_num_vehs_seg),  # num_vehs
             gym.spaces.Box(config.min_speed, config.max_speed),  # mean_speed
-            gym.spaces.Discrete(config.max_speed),  # current_SL
+            gym.spaces.Box(config.min_speed, config.max_speed),  # current_SL
             gym.spaces.Discrete(config.sim_duration)  # time_passed
         ))
             for seg in SEGMENTS})
