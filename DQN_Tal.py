@@ -146,7 +146,7 @@ def main():
 
     # training loop - train all of the agents at the same time on the same environment
     steps_done = 0
-    mean_delays = {demand: [] for demand in range(DEMANDS)}
+    mean_delays = {demand: [] for demand in DEMANDS}
     for i_episode in range(NUM_EPISODES):
         # Initialize the environment and state
         state, info = env.reset()
