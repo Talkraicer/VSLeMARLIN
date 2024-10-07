@@ -13,10 +13,12 @@ from run_utils import set_speed_limits
 from cfg_files_VSL.create_cfg_files import set_cfg_file
 from rou_files_VSL.create_rou_files import set_rou_file
 from main import init_simulation
+from results_parse import get_mean_delay
 
 warnings.filterwarnings("ignore")
 np.random.seed(SEED)
 LOG = False
+
 
 # List of relevant studied features
 
@@ -81,6 +83,9 @@ class SegVSL(gym.Env):
         self.timestep = 0
         self.time_since_change = {}
         self.last_speeds = {}
+        self.demand = None
+        self.seed = None
+
     def observation(self):
         return self.state
 
@@ -105,6 +110,8 @@ class SegVSL(gym.Env):
         set_cfg_file(demand, seed)
         sumoCfg = f"cfg_files_VSL/{demand}/{seed}/{EXP_NAME}.sumocfg"
 
+        self.demand = demand
+        self.seed = seed
         # initialize the simulation
         init_simulation((self.policy_name, sumoCfg))
 
@@ -115,7 +122,10 @@ class SegVSL(gym.Env):
     def step(self, seg_actions):
         rewards, done = self._action_wrapper(seg_actions)
         obs = self.observation()
-        return obs, sum(rewards.values()), done, False, rewards
+        if done:
+            mean_delay = get_mean_delay(self.demand,self.seed, self.policy_name)
+            return obs, mean_delay, done, False, rewards
+        return obs, 0, done, False, rewards
 
     def _extract_features_segment(self, segment):
         edges = segment.split("+")
@@ -195,8 +205,8 @@ if __name__ == '__main__':
     total_reward_sum = 0
     while not done:
         actions = {seg: 1 for seg in SEGMENTS}
-        obs, total_reward, done, _, agents_rewards = env.step(actions)
+        obs, mean_delay, done, _, agents_rewards = env.step(actions)
         if LOG:
             logger.log(actions, agents_rewards)
-        total_reward_sum += total_reward
+        total_reward_sum += sum(agents_rewards.values())
         print(f"Total Reward: {total_reward_sum}")

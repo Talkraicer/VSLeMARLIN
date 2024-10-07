@@ -14,14 +14,14 @@ import torch.optim as optim
 import torch.nn.functional as F
 from GymVSL import *
 
-BATCH_SIZE = 2
+BATCH_SIZE = 8
 GAMMA = 0.99
 EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
-NUM_EPISODES = 10
+NUM_EPISODES = 100
 MEMORY_SIZE = 10000
 # if GPU is to be used
 device = torch.device(
@@ -125,8 +125,9 @@ def optimize_model(memory, policy_net, target_net, optimizer):
 
 
 def main():
-    env = SegVSL("DQN_distri", Config())
-
+    policy_name = "DQN_distri"
+    env = SegVSL(policy_name, Config())
+    logger = Logger(policy_name)
     agents = {}
     for seg in SEGMENTS:
         # Get number of actions from gym action space
@@ -145,9 +146,11 @@ def main():
 
     # training loop - train all of the agents at the same time on the same environment
     steps_done = 0
+    mean_delays = {demand: [] for demand in range(DEMANDS)}
     for i_episode in range(NUM_EPISODES):
         # Initialize the environment and state
         state, info = env.reset()
+        total_reward = 0
         for t in count():
             # Select and perform an action
             actions = {}
@@ -155,8 +158,9 @@ def main():
                 state_dict = state[seg]
                 state_tensor = torch.tensor([state_dict], device=device, dtype=torch.float32)
                 actions[seg] = select_action(state_tensor, steps_done, agents[seg][0], env.action_space[seg])
-            next_state, reward, done, _, agents_rewards = env.step(actions)
-
+            next_state, mean_delay, done, _, agents_rewards = env.step(actions)
+            total_reward += sum(agents_rewards.values())
+            logger.log(actions, agents_rewards)
             # Store the transition in memory
             for seg in SEGMENTS:
                 state_dict = state[seg]
@@ -178,8 +182,21 @@ def main():
             steps_done += 1
             if done:
                 break
+        print("*" * 50)
         print(f"Episode {i_episode} finished after {t + 1} timesteps, total reward: {total_reward}")
-
+        print("Demand:", env.demand)
+        print("seed:", env.seed)
+        print("Mean delay:", mean_delay)
+        print("*" * 50)
+        mean_delays[env.demand].append(mean_delay)
+    # end wandb
+    logger.close()
+    env.close()
+    with open("delays.txt", "w") as f:
+        for demand in mean_delays:
+            f.write(f"Demand: {demand}\n")
+            f.write(f"Mean delays: {mean_delays[demand]}\n")
+            f.write("*" * 50 + "\n")
 
 if __name__ == '__main__':
     main()
