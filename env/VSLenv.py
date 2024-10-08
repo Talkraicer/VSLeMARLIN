@@ -4,11 +4,11 @@ import gymnasium as gym
 import numpy as np
 from collections import OrderedDict
 from env.SUMOAdpater import SUMOAdapter
-import traci
+
 
 class VSLenv(gym.Env):
     def __init__(self, config):
-        self.config = config.get_config()
+        self.config = config.get_config
         self.observation_space = gym.spaces.Dict(self._set_observations())
         self.observation_space.spaces = OrderedDict(self.observation_space.spaces)
         action_space = {seg: gym.spaces.Discrete(self.config["num_actions"]) for seg in self.config["segments"]}
@@ -21,9 +21,9 @@ class VSLenv(gym.Env):
         self.time_since_change = {}
         self.last_speeds = {}
         self.demand = None
-        self.seed = config["seed"]
+        self.seed = self.config["seed"]
         np.random.seed(self.seed)
-        self.SUMO = SUMOAdapter(self.config["segments"])
+        self.SUMO = SUMOAdapter(segments=self.config["segments"])
 
     def step(self, actions):
         for seg in self.config["segments"]:
@@ -50,11 +50,11 @@ class VSLenv(gym.Env):
         return self.state, 0, done, False, rewards
 
     def reset(self, seed=None, demand="Low"):
-        # check if a traci instance is already running
-        try:
-            traci.close()
-        except:
-            raise Exception("TraCI has an unclosed instance running, please close manually and rerun.")
+        # check if a SUMO instance is already running
+        # try:
+        #     self.SUMO.close()
+        # except:
+        #     raise Exception("SUMO has an unclosed instance running, please close manually and rerun.")
 
         # reset the environment
         self.timestep = 0
@@ -65,11 +65,11 @@ class VSLenv(gym.Env):
         if seed is not None:
             self.seed = seed
             np.random.seed(seed)
-        if demand is not in ["low", "medium", "high"]:
+        if demand not in ["low", "medium", "high"]:
             raise ValueError("invalid demand profile value")
         self.demand = demand
 
-        # TODO: sumo init
+        self.SUMO.init_simulation(seed, demand)
 
         # run sumo for warp-up
         for decisions in range(self.config["min_change_act"]):
@@ -78,6 +78,9 @@ class VSLenv(gym.Env):
 
     def render(self):
         pass
+
+    def close(self):
+        self.SUMO.close()
 
     def _set_observations(self):
         return OrderedDict(

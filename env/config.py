@@ -1,7 +1,7 @@
 class Config:
     def __init__(self, act_rate = 15, min_change_act = 4, obs_type = "default", log_wandb = True, num_actions=3,
                  warmup = 40, min_speed = 0, max_speed = 120, nominal_speed = 80, speed_step = 5, max_num_vehs_seg = 1000,
-                 sim_duration = 3600 * 2, segments=None):
+                 sim_duration = 3600 * 2, seed=42, segments=None):
         # initialize the config with the default values
         self._args = dict()
         self._args["act_rate"] = act_rate # run each decision step for 15 seconds
@@ -19,7 +19,8 @@ class Config:
         self._args["max_num_vehs_seg"] = max_num_vehs_seg # TODO: change
         self._args["sim_duration"] = sim_duration # 2 hours TODO: change
 
-        self.args["segments"] = segments
+        self._args["segments"] = segments
+        self._args["seed"] = seed
 
 
     @property
