@@ -23,13 +23,14 @@ class VSLenv(gym.Env):
         self.demand = None
         self.seed = self.config["seed"]
         np.random.seed(self.seed)
-        self.SUMO = SUMOAdapter(segments=self.config["segments"])
+        self.SUMO = SUMOAdapter(segments=self.config["segments"], gui=self.config["gui"])
 
     def step(self, actions):
         for seg in self.config["segments"]:
             self.last_speeds[seg] = self._clamp((self.last_speeds[seg] + self.action_mapping[actions[seg]] *
                                      self.config["speed_step"]) , self.config["min_speed"], self.config["max_speed"])
-            self.time_since_change[seg] = ((1 - np.abs(self.action_mapping))
+            # self.time_since_change[seg] = ((1 - np.abs(self.action_mapping[actions[seg]]))
+            self.time_since_change[seg] = (np.abs(self.action_mapping[actions[seg]])
                                            * (self.time_since_change[seg] + self.config["act_rate"]))
         # send actions to sumo
         self.SUMO.set_speed_limits(self.last_speeds)
@@ -39,7 +40,7 @@ class VSLenv(gym.Env):
         self.timestep += self.config["act_rate"]
 
         # update state from SUMO
-        self.state = SUMOAdapter.get_state()
+        self.state = self.SUMO.get_state()
         for seg in self.config["segments"]:
             self.state[seg].append(np.float32(self.last_speeds[seg]))
             self.state[seg].append(self.time_since_change[seg])
@@ -47,7 +48,10 @@ class VSLenv(gym.Env):
         done = self.SUMO.isFinish()
 
         # TODO: change the zero to the total reward (sum)
-        return self.state, 0, done, False, rewards
+        total_reward = 0
+        for seg in self.config["segments"]:
+            total_reward += rewards[seg]
+        return self.state, total_reward, done, False, rewards
 
     def reset(self, seed=None, demand="Low"):
         # check if a SUMO instance is already running
@@ -73,8 +77,10 @@ class VSLenv(gym.Env):
 
         # run sumo for warp-up
         for decisions in range(self.config["min_change_act"]):
-            actions = [0 for seg in self.config["segments"]]    #default actions - do nothing
+            actions = {seg: 0 for seg in self.config["segments"]}    #default actions - do nothing
             self.step(actions)
+
+        return self.state, {}
 
     def render(self):
         pass

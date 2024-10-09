@@ -29,15 +29,18 @@ class SUMOAdapter():
         return step_vehs
 
     def run_for_timesteps(self, timesteps):
-        completion_rate = {seg: 0 for seg in self.segments}
-        last_vehicles_IDs = self.get_vehicle_IDs(self.segments)
+        route_completions = {seg: 0 for seg in self.segments}
+        last_vehicles_IDs = self.get_vehicle_IDs()
 
         for i in range(timesteps):
             traci.simulationStep()
 
-            curr_vehicles_IDs = self.get_vehicle_IDs(self.segments)
-            completion_rate += len(curr_vehicles_IDs - last_vehicles_IDs)
+            curr_vehicles_IDs = self.get_vehicle_IDs()
+            for seg in self.segments:
+                route_completions[seg] += len(last_vehicles_IDs[seg] - curr_vehicles_IDs[seg])
             last_vehicles_IDs = curr_vehicles_IDs
+
+        completion_rate = {seg: route_completions[seg] / timesteps for seg in self.segments}
 
         return completion_rate
 
@@ -177,9 +180,11 @@ class SUMOAdapter():
 
     def _init_sumo(self, config_file, results_file=None):
         sumo_binary = self._get_sumo_entrypoint()
-        sumo_cmd = [sumo_binary, "-c", config_file]
+        cfg = os.path.join(self.config_folder, config_file)
+        sumo_cmd = [sumo_binary, "-c", cfg]
         if results_file is not None:
-            sumo_cmd = sumo_cmd + ["--tripinfo-output ", results_file]
+            sumo_cmd = sumo_cmd + ["--tripinfo-output", results_file]
+        print(sumo_cmd)
         traci.start(sumo_cmd)
 
     def _get_sumo_entrypoint(self):
