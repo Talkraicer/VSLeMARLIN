@@ -18,7 +18,7 @@ def main():
     for steps in range(60):
         action = env.action_space.sample()
         state, _, _, _, rewards = env.step(action)
-        print(state)
+        print(steps, state)
 
     env.close()
 

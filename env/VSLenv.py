@@ -23,7 +23,7 @@ class VSLenv(gym.Env):
         self.demand = None
         self.seed = self.config["seed"]
         np.random.seed(self.seed)
-        self.SUMO = SUMOAdapter(segments=self.config["segments"], gui=self.config["gui"])
+        self.SUMO = SUMOAdapter(segments=self.config["segments"], gui=self.config["gui"], )
 
     def step(self, actions):
         for seg in self.config["segments"]:
@@ -55,10 +55,10 @@ class VSLenv(gym.Env):
 
     def reset(self, seed=None, demand="Low"):
         # check if a SUMO instance is already running
-        # try:
-        #     self.SUMO.close()
-        # except:
-        #     raise Exception("SUMO has an unclosed instance running, please close manually and rerun.")
+        try:
+            self.SUMO.close()
+        except:
+            pass
 
         # reset the environment
         self.timestep = 0
@@ -73,7 +73,8 @@ class VSLenv(gym.Env):
             raise ValueError("invalid demand profile value")
         self.demand = demand
 
-        self.SUMO.init_simulation(seed, demand)
+        self.SUMO.init_simulation(seed, demand, output_folder=self.config["output_folder"],
+                                  output_file=self.config["output_file"])
 
         # run sumo for warp-up
         for decisions in range(self.config["min_change_act"]):
