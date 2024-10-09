@@ -72,12 +72,14 @@ class SUMOAdapter():
     def close(self):
         traci.close()
 
-    def init_simulation(self, seed, demand, network_file="network.xml",route_file="route.xml",
-                        config_file="config.sumocfg", output_file="output.xml"):
+    def init_simulation(self, seed, demand, route_file="route.xml",
+                        config_file="config.sumocfg", output_folder="experiments", output_file="output.xml"):
         demand = self.demand_map[demand]
+        self.output_file = output_file
+        output_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", output_folder)
         self._create_route_file(demand, seed, route_file)
         self._create_config_file(seed, route_file=route_file, config_file=config_file)
-        self._init_sumo(config_file, output_file)
+        self._init_sumo(config_file, output_folder)
 
     def _create_route_file(self, demand, seed, route_file, hour_len = 600):
         # create a bell like demand shape
@@ -178,12 +180,12 @@ class SUMOAdapter():
         output_config_file = os.path.join(self.config_folder, config_file)
         tree.write(output_config_file)
 
-    def _init_sumo(self, config_file, results_file=None):
+    def _init_sumo(self, config_file, results_folder=None):
         sumo_binary = self._get_sumo_entrypoint()
         cfg = os.path.join(self.config_folder, config_file)
         sumo_cmd = [sumo_binary, "-c", cfg]
-        if results_file is not None:
-            sumo_cmd = sumo_cmd + ["--tripinfo-output", results_file]
+        results_file = os.path.join(results_folder, self.output_file)
+        sumo_cmd = sumo_cmd + ["--tripinfo-output", results_file]
         print(sumo_cmd)
         traci.start(sumo_cmd)
 
