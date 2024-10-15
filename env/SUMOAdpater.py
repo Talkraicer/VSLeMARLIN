@@ -186,7 +186,7 @@ class SUMOAdapter():
         sumo_cmd = [sumo_binary, "-c", cfg]
         results_file = os.path.join(results_folder, self.output_file)
         sumo_cmd = sumo_cmd + ["--tripinfo-output", results_file]
-        print(sumo_cmd)
+        # print(sumo_cmd)
         traci.start(sumo_cmd)
 
     def _get_sumo_entrypoint(self):
